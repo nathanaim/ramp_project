@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer, OrdinalEncoder
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import HistGradientBoostingRegressor
 
@@ -66,6 +66,7 @@ def _clean_and_add_data(data):
     merged_data['is_confinement_3'] = (merged_data.date_datetime > '2021-04-02') & (merged_data.date_datetime < '2021-05-03')
     merged_data['couvre_feu_21'] = (merged_data.date_datetime > '2021-18-05') & (merged_data.date_datetime < '2021-09-06')
     merged_data['couvre_feu_23'] = (merged_data.date_datetime > '2021-08-06') & (merged_data.date_datetime < '2021-21-06')
+    merged_data.drop(columns=['date_datetime'], inplace=True)
 
     return merged_data
 
@@ -73,9 +74,9 @@ def get_estimator():
     provide_date_info = FunctionTransformer(_provide_date_info)
     clean_and_add_data = FunctionTransformer (_clean_and_add_data)
 
-    categorical_columns = ['counter_id', 'site_id', 'is_ferie', 'is_holiday', 'is_confinement_1', 'is_confinement_2', 'commerce_fermes_20',
+    passthrough = ['is_ferie', 'is_holiday', 'is_confinement_1', 'is_confinement_2', 'commerce_fermes_20',
                             'couvre_feu_20', 'couvre_feu_18', 'is_confinement_3', 'couvre_feu_21', 'couvre_feu_23', 'weekday',
-                            'year', 'is_daylight', 'cl', 'cm', 'ch', 'pluie_intermittente', 'pluie_continue', 'pluie_forte',
+                             'is_daylight', 'cl', 'cm', 'ch', 'pluie_intermittente', 'pluie_continue', 'pluie_forte',
                              'pluie_faible', 'pluie_modérée', 'neige', 'bruine', 'brouillard', 'verglas', 'is_down']
     numerical_columns = ['hour',
                         'month',
@@ -103,10 +104,9 @@ def get_estimator():
                         'rr24']
 
 
-    preprocessor = ColumnTransformer([('one_hot_encoder', OneHotEncoder(drop='first', sparse=False, handle_unknown='ignore'), categorical_columns),
-                                ('standard_scaler', StandardScaler(), numerical_columns)])
+    preprocessor = ColumnTransformer([('standard_scaler', StandardScaler(), numerical_columns), ('ordinal_encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=100), ['counter_id', 'site_id', 'year']), ('pass', 'passthrough', passthrough)])
 
-    model = HistGradientBoostingRegressor(max_depth=30, min_samples_leaf=50, l2_regularization=20, max_iter=1000)
+    model = HistGradientBoostingRegressor(max_depth=20, min_samples_leaf=50, l2_regularization=10, max_iter=500, categorical_features=list(range(25, 52)))
 
     pipe = make_pipeline(provide_date_info, clean_and_add_data, preprocessor, model)
 
